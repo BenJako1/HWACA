@@ -17,8 +17,8 @@ const int xSoftLimit = 110;  // in mm
 const int ySoftLimit = 110;  // in mm
 
 // Pin definitions
-const int SCKPin = 52;
-const int CSPin = 53;
+const int SCKPin = 52;                                       // Clock pin (mega 52)
+const int CSPin = 53;                                        // Chip select pin (mega 53)
 const int motorPin[8] = { 22, 23, 24, 25, 26, 27, 28, 29 };  // Pins in pairs (Step, Direction) for each motor
 const int xLimitPin = 18;
 const int yLimitPin = 19;
@@ -32,23 +32,22 @@ char buffer[bufferSize];     // Create buffer
 const int inputFileSize = 100;      // Number of lines alloted for storing the file data
 const int maxSpeed = 200;           // Max steps/sec
 const int motorAcceleration = 500;  // Motor acceleration in steps/sec^2
-const float homeFeed = 50;          // Feedrate (mm/sec) during homing process after first trigger
-const float homeSeek = 250;         // Feedrate (mm/sec) during homing process before first trigger (should be small enough to stop machine from crashing into switch)
+const float homeFeed = 4;           // Feedrate (mm/sec) during homing process after first trigger
+const float homeSeek = 10;          // Feedrate (mm/sec) during homing process before first trigger (should be small enough to stop machine from crashing into switch)
 const float homePulloff = 4;        // Distance in mm retracted after hitting limit switch during homing (also sets 0,0 relative to limit switches)
 const int homeDelay = 500;          // Delay in ms between homing operations
 const int calibrationSteps = 200;   // Number of steps done during calibration
 
 // EEPROM addresses
-const int xCalibration_Address = 0;
+const int xCalibration_Address = 0;  // Length 4 since float values are stored
 const int yCalibration_Address = 4;
 
 // Global GCode & operating variables
-float xValue, yValue, iValue, jValue;  // Create x & y values variables
-int feedrate, command;                 // Create feedrate and command variable (e.g. '1' for G1)
+float xValue, yValue, iValue, jValue;
+int feedrate, command;
 String userInput;
 bool homed = false;
 long positionToMove[4];
-volatile bool interruptTrigger = false;
 float XYPositionArray[inputFileSize][2] = {};
 float IJPositionArray[inputFileSize][2] = {};
 float XYInfoArray[inputFileSize][2] = {};
@@ -67,9 +66,6 @@ AccelStepper jMotor(1, motorPin[6], motorPin[7]);
 MultiStepper motorControl;
 
 void setup() {
-  //Wait for board to reset (prevents garbled serial while uploading)
-  delay(1000);
-
   // Define pinmodes
   pinMode(xLimitPin, INPUT_PULLUP);
   pinMode(yLimitPin, INPUT_PULLUP);
@@ -77,7 +73,7 @@ void setup() {
   pinMode(jLimitPin, INPUT_PULLUP);
   pinMode(CSPin, OUTPUT);
 
-  // Configure motor settings
+  // Configure motor parameters
   xMotor.setMaxSpeed(maxSpeed);
   yMotor.setMaxSpeed(maxSpeed);
   iMotor.setMaxSpeed(maxSpeed);
@@ -87,6 +83,7 @@ void setup() {
   iMotor.setAcceleration(motorAcceleration);
   jMotor.setAcceleration(motorAcceleration);
 
+  // Configure Multistepper object
   motorControl.addStepper(xMotor);
   motorControl.addStepper(yMotor);
   motorControl.addStepper(iMotor);
@@ -101,17 +98,9 @@ void setup() {
   while (!Serial)
     ;
 
-  // Initialise SD card and fine file sizes
+  // Initialise SD card
   initialiseSD();
 
-  //Delay to avoid interefence from interrupts
-  delay(150);
-
-  // Attach interrupts
-  attachInterrupt(digitalPinToInterrupt(xLimitPin), limitInterrupt_ISR, FALLING);
-  attachInterrupt(digitalPinToInterrupt(yLimitPin), limitInterrupt_ISR, FALLING);
-  attachInterrupt(digitalPinToInterrupt(iLimitPin), limitInterrupt_ISR, FALLING);
-  attachInterrupt(digitalPinToInterrupt(jLimitPin), limitInterrupt_ISR, FALLING);
   // Output confimation
   Serial.println("Setup complete.");
 }
@@ -133,10 +122,8 @@ void runProgram() {
     for (int i = 0; i < inputFileSize; i++) {
       moveMotor(XYPositionArray[i][0], XYPositionArray[i][1], 100, IJPositionArray[i][0], IJPositionArray[i][1], 100);
     }
-    Serial.println("done.");
-  } else {
-    Serial.println("path is out of bounds...stopping execution.");
   }
+  Serial.println("done.");
 }
 
 void readFile(String fileToRead) {
@@ -201,14 +188,9 @@ void moveMotor(float xMoveTo, float yMoveTo, int XYFeed, float iMoveTo, float jM
 // Homing sequence
 void home() {
   Serial.print("Homing...");
-  delay(150);
-  // Detach interrupts
-  detachInterrupt(digitalPinToInterrupt(xLimitPin));
-  detachInterrupt(digitalPinToInterrupt(yLimitPin));
-  delay(150);
 
   // Set xMotor moving at homeSeek rate towards 0
-  xMotor.setSpeed(-homeSeek);
+  xMotor.setSpeed(-homeSeek * xCalibration);
   // When a trigger is detected, pull off and stop
   while (digitalRead(xLimitPin) == 1) {
     xMotor.runSpeed();
@@ -222,7 +204,7 @@ void home() {
   xMotor.stop();
   delay(homeDelay);
   // Set xMotor moving at homeFeed rate towards 0
-  xMotor.setSpeed(-homeFeed);
+  xMotor.setSpeed(-homeFeed * xCalibration);
   // When a trigger is detected, pull off and stop
   while (digitalRead(xLimitPin) == 1) {
     xMotor.runSpeed();
@@ -238,7 +220,7 @@ void home() {
   xMotor.setCurrentPosition(0);
 
   // Set yMotor moving at homeSeek rate towards 0
-  yMotor.setSpeed(-homeSeek);
+  yMotor.setSpeed(-homeSeek * yCalibration);
   // When a trigger is detected, pull off and stop
   while (digitalRead(yLimitPin) == 1) {
     yMotor.runSpeed();
@@ -252,7 +234,7 @@ void home() {
   yMotor.stop();
   delay(homeDelay);
   // Set yMotor moving at homeFeed rate towards 0
-  yMotor.setSpeed(-homeFeed);
+  yMotor.setSpeed(-homeFeed * yCalibration);
   // When a trigger is detected, pull off and stop
   while (digitalRead(yLimitPin) == 1) {
     yMotor.runSpeed();
@@ -267,12 +249,66 @@ void home() {
   // Set current position to 0
   yMotor.setCurrentPosition(0);
 
-  // Repeat for other motors
+  // Set iMotor moving at homeSeek rate towards 0
+  iMotor.setSpeed(-homeSeek * xCalibration);
+  // When a trigger is detected, pull off and stop
+  while (digitalRead(iLimitPin) == 1) {
+    iMotor.runSpeed();
+  }
+  iMotor.stop();
+  delay(homeDelay);
+  iMotor.move(homePulloff * xCalibration);
+  while (iMotor.distanceToGo() != 0) {
+    iMotor.run();
+  }
+  iMotor.stop();
+  delay(homeDelay);
+  // Set iMotor moving at homeFeed rate towards 0
+  iMotor.setSpeed(-homeFeed * xCalibration);
+  // When a trigger is detected, pull off and stop
+  while (digitalRead(iLimitPin) == 1) {
+    iMotor.runSpeed();
+  }
+  iMotor.stop();
+  delay(homeDelay);
+  iMotor.move(homePulloff * xCalibration);
+  while (iMotor.distanceToGo() != 0) {
+    iMotor.run();
+  }
+  iMotor.stop();
+  // Set current position to 0
+  iMotor.setCurrentPosition(0);
 
-  // Re-attach interrupts
-  delay(150);
-  attachInterrupt(digitalPinToInterrupt(xLimitPin), limitInterrupt_ISR, FALLING);
-  attachInterrupt(digitalPinToInterrupt(yLimitPin), limitInterrupt_ISR, FALLING);
+  // Set jMotor moving at homeSeek rate towards 0
+  jMotor.setSpeed(-homeSeek * yCalibration);
+  // When a trigger is detected, pull off and stop
+  while (digitalRead(jLimitPin) == 1) {
+    jMotor.runSpeed();
+  }
+  jMotor.stop();
+  delay(homeDelay);
+  jMotor.move(homePulloff * yCalibration);
+  while (jMotor.distanceToGo() != 0) {
+    jMotor.run();
+  }
+  jMotor.stop();
+  delay(homeDelay);
+  // Set jMotor moving at homeFeed rate towards 0
+  jMotor.setSpeed(-homeFeed * yCalibration);
+  // When a trigger is detected, pull off and stop
+  while (digitalRead(jLimitPin) == 1) {
+    jMotor.runSpeed();
+  }
+  jMotor.stop();
+  delay(homeDelay);
+  jMotor.move(homePulloff * yCalibration);
+  while (jMotor.distanceToGo() != 0) {
+    jMotor.run();
+  }
+  jMotor.stop();
+  // Set current position to 0
+  jMotor.setCurrentPosition(0);
+
   // Set homed to true
   homed = true;
   // Output to serial that homing is complete
@@ -288,7 +324,7 @@ void calibrate(float& xCalibration, float& yCalibration) {
   userInput = Serial.readStringUntil('\n');
   if (userInput.equals("ready")) {
     // Move calibrationSteps in x
-    xMotor.setSpeed(homeSeek);
+    xMotor.setSpeed(homeSeek * xCalibration);
     xMotor.move(calibrationSteps);
     while (xMotor.distanceToGo() != 0) {
       xMotor.run();
@@ -314,7 +350,7 @@ void calibrate(float& xCalibration, float& yCalibration) {
   userInput = Serial.readStringUntil('\n');
   if (userInput.equals("ready")) {
     // Move calibrationSteps in y
-    yMotor.setSpeed(homeSeek);
+    yMotor.setSpeed(homeSeek * yCalibration);
     yMotor.move(calibrationSteps);
     while (yMotor.distanceToGo() != 0) {
       yMotor.run();
@@ -467,7 +503,6 @@ void userInterface() {
   }
 }
 
-
 void initialiseSD() {
   Serial.print("Initializing SD...");
   if (!SD.begin(SCKPin)) {
@@ -475,10 +510,4 @@ void initialiseSD() {
   } else {
     Serial.println("initialization done.");
   }
-}
-
-// ISR for limit switch trigger
-void limitInterrupt_ISR() {
-  //xMotor.stop();
-  //yMotor.stop();
 }
