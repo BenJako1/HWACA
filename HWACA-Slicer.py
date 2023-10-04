@@ -1,3 +1,9 @@
+'''
+Slicer for HWACA
+Benjamin Jakobs
+Created Sep 2023
+'''
+
 #importing libraries
 import pandas as pd
 from pathlib import Path
