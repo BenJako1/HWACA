@@ -330,7 +330,7 @@ void CMD_G1(const char* input, float& xValue, float& yValue, float& iValue, floa
   if (feedPointer) {
     feedrate = atoi(feedPointer + 1);
   }
-
+  
   moveMotor(xValue, yValue, feedrate, iValue, jValue, feedrate);
 }
 
