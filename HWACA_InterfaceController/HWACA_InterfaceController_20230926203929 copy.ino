@@ -17,8 +17,6 @@ const int xSoftLimit = 110;  // in mm
 const int ySoftLimit = 110;  // in mm
 
 // Pin definitions
-const int SCKPin = 52;                                       // Clock pin (mega 52)
-const int CSPin = 53;                                        // Chip select pin (mega 53)
 const int motorPin[8] = { 22, 23, 24, 25, 26, 27, 28, 29 };  // Pins in pairs (Step, Direction) for each motor
 const int xLimitPin = 18;
 const int yLimitPin = 19;
@@ -44,20 +42,11 @@ const int yCalibration_Address = 4;
 
 // Global GCode & operating variables
 float xValue, yValue, iValue, jValue;
-int feedrate, command;
-String userInput;
+int feedrate;
+String rxString;
 bool homed = false;
+
 long positionToMove[4];
-float XYPositionArray[inputFileSize][2] = {};
-float IJPositionArray[inputFileSize][2] = {};
-float XYInfoArray[inputFileSize][2] = {};
-float IJInfoArray[inputFileSize][2] = {};
-bool functionBreak = false;
-
-
-String fileName[2] = { "Path-1.txt", "Path-2.txt" };
-File file;
-
 AccelStepper xMotor(1, motorPin[0], motorPin[1]);
 AccelStepper yMotor(1, motorPin[2], motorPin[3]);
 AccelStepper iMotor(1, motorPin[4], motorPin[5]);
@@ -71,7 +60,6 @@ void setup() {
   pinMode(yLimitPin, INPUT_PULLUP);
   pinMode(iLimitPin, INPUT_PULLUP);
   pinMode(jLimitPin, INPUT_PULLUP);
-  pinMode(CSPin, OUTPUT);
 
   // Configure motor parameters
   xMotor.setMaxSpeed(maxSpeed);
@@ -90,83 +78,17 @@ void setup() {
   motorControl.addStepper(jMotor);
 
   // Actualise settings from EEPROM
-  EEPROM.get(xCalibration_Address, xCalibration);
-  EEPROM.get(yCalibration_Address, yCalibration);
+  //EEPROM.get(xCalibration_Address, xCalibration);
+  //EEPROM.get(yCalibration_Address, yCalibration);
 
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
   while (!Serial)
     ;
-
-  // Initialise SD card
-  initialiseSD();
-
-  // Output confimation
-  Serial.println("Setup complete.");
 }
 
 void loop() {
-  userInterface();
-  functionBreak = false;
-}
-
-void runProgram() {
-  Serial.print("Starting...");
-  // Read both files
-  readFile(fileName[0]);
-  Serial.print("done reading file 1...");
-  readFile(fileName[1]);
-  Serial.print("done reading file 2...moving...");
-
-  if (functionBreak == false) {
-    for (int i = 0; i < inputFileSize; i++) {
-      moveMotor(XYPositionArray[i][0], XYPositionArray[i][1], 100, IJPositionArray[i][0], IJPositionArray[i][1], 100);
-    }
-  }
-  Serial.println("done.");
-}
-
-void readFile(String fileToRead) {
-  file = SD.open(fileToRead);
-  if (file) {
-    unsigned int index = 0;
-    unsigned int writeIndex = 0;
-    char c;
-
-    while (file.available()) {
-      c = file.read();  // Read a character from the file
-
-      if (c == '\n') {
-        buffer[index] = '\0';  // Null-terminate the buffer
-        if (fileToRead == fileName[0]) {
-          interpretXY(buffer);
-          XYPositionArray[writeIndex][0] = xValue;
-          XYPositionArray[writeIndex][1] = yValue;
-          XYInfoArray[writeIndex][0] = command;
-          XYInfoArray[writeIndex++][1] = feedrate;
-          if (xValue < 0 || xValue >= xSoftLimit || yValue < 0 || yValue >= ySoftLimit) {
-            functionBreak = true;
-          }
-        } else if (fileToRead == fileName[1]) {
-          interpretIJ(buffer);
-          IJPositionArray[writeIndex][0] = iValue;
-          IJPositionArray[writeIndex][1] = jValue;
-          IJInfoArray[writeIndex][0] = command;
-          IJInfoArray[writeIndex++][1] = feedrate;
-          if (iValue < 0 || iValue >= xSoftLimit || jValue < 0 || jValue >= ySoftLimit) {
-            functionBreak = true;
-          }
-        }
-        // Clear the buffer for the next line
-        memset(buffer, 0, bufferSize);
-        index = 0;
-      } else if (index < bufferSize - 1) {
-        buffer[index++] = c;  // Add the character to the buffer
-      }
-    }
-  } else {
-    Serial.println("error opening file.");
-  }
+  interface();
 }
 
 // Movement scripts
@@ -183,12 +105,12 @@ void moveMotor(float xMoveTo, float yMoveTo, int XYFeed, float iMoveTo, float jM
   positionToMove[3] = jMoveTo * yCalibration;
   motorControl.moveTo(positionToMove);
   motorControl.runSpeedToPosition();
+
+  Serial.print("next");
 }
 
 // Homing sequence
 void home() {
-  Serial.print("Homing...");
-
   // Set xMotor moving at homeSeek rate towards 0
   xMotor.setSpeed(-homeSeek * xCalibration);
   // When a trigger is detected, pull off and stop
@@ -312,7 +234,7 @@ void home() {
   // Set homed to true
   homed = true;
   // Output to serial that homing is complete
-  Serial.println("homing complete.");
+  Serial.println("next");
 }
 
 // Calibration function used for calculating axis travel in mm
@@ -321,8 +243,8 @@ void calibrate(float& xCalibration, float& yCalibration) {
   Serial.println("Type 'ready' for x calibration or anything else to quit calibration.");
   while (!Serial.available())
     ;
-  userInput = Serial.readStringUntil('\n');
-  if (userInput.equals("ready")) {
+  rxString = Serial.readStringUntil('\n');
+  if (rxString.equals("ready")) {
     // Move calibrationSteps in x
     xMotor.setSpeed(homeSeek * xCalibration);
     xMotor.move(calibrationSteps);
@@ -338,17 +260,17 @@ void calibrate(float& xCalibration, float& yCalibration) {
   // Read input value and write to xCalibration
   while (!Serial.available())
     ;
-  userInput = Serial.readStringUntil('\n');
-  Serial.println(userInput);
-  xCalibration = calibrationSteps / userInput.toFloat();
+  rxString = Serial.readStringUntil('\n');
+  Serial.println(rxString);
+  xCalibration = calibrationSteps / rxString.toFloat();
   Serial.print("xCalibration value: ");
   Serial.println(xCalibration);
   // Type "ready" for y calibration
   Serial.println("Type 'ready' for y calibration or anything else to quit calibration.");
   while (!Serial.available())
     ;
-  userInput = Serial.readStringUntil('\n');
-  if (userInput.equals("ready")) {
+  rxString = Serial.readStringUntil('\n');
+  if (rxString.equals("ready")) {
     // Move calibrationSteps in y
     yMotor.setSpeed(homeSeek * yCalibration);
     yMotor.move(calibrationSteps);
@@ -364,9 +286,9 @@ void calibrate(float& xCalibration, float& yCalibration) {
   // Read input value and write to yCalibration
   while (!Serial.available())
     ;
-  userInput = Serial.readStringUntil('\n');
-  Serial.println(userInput);
-  yCalibration = calibrationSteps / userInput.toFloat();
+  rxString = Serial.readStringUntil('\n');
+  Serial.println(rxString);
+  yCalibration = calibrationSteps / rxString.toFloat();
   Serial.print("yCalibration value: ");
   Serial.println(yCalibration);
 
@@ -374,19 +296,11 @@ void calibrate(float& xCalibration, float& yCalibration) {
   EEPROM.put(xCalibration_Address, xCalibration);
   EEPROM.put(yCalibration_Address, yCalibration);
 
-  Serial.println("Calibration complete.");
+  Serial.println("next.");
 }
 
-// Takes the buffer string (one line of Gcode) and outputs the float values following X and Y as well as integers of the command and feedrate
-void interpretXY(const char* input) {
-  const char* commandPointer = strchr(input, 'G');  // Find the pointer to the letter 'G' in the string
-  if (commandPointer) {
-    command = atoi(commandPointer + 1);  // If there is a 'G', store the value of the following integer in the 'command' variable
-  }
-  const char* feedPointer = strchr(input, 'F');
-  if (feedPointer) {
-    feedrate = atoi(feedPointer + 1);
-  }
+// Interprets the G1 command parameters and moves motors
+void CMD_G1(const char* input, float& xValue, float& yValue, float& iValue, float& jValue, int& feedrate) {
   const char* xPointer = strchr(input, 'X');
   if (xPointer) {
     xValue = atof(xPointer + 1);
@@ -395,119 +309,52 @@ void interpretXY(const char* input) {
   if (yPointer) {
     yValue = atof(yPointer + 1);
   }
-}
-
-void interpretIJ(const char* input) {
-  const char* commandPointer = strchr(input, 'G');  // Find the pointer to the letter 'G' in the string
-  if (commandPointer) {
-    command = atoi(commandPointer + 1);  // If there is a 'G', store the value of the following integer in the 'command' variable
+  const char* iPointer = strchr(input, 'I');
+  if (iPointer) {
+    iValue = atof(iPointer + 1);
+  }
+  const char* jPointer = strchr(input, 'J');
+  if (jPointer) {
+    jValue = atof(jPointer + 1);
   }
   const char* feedPointer = strchr(input, 'F');
   if (feedPointer) {
     feedrate = atoi(feedPointer + 1);
   }
-  const char* xPointer = strchr(input, 'X');
-  if (xPointer) {
-    iValue = atof(xPointer + 1);
-  }
-  const char* yPointer = strchr(input, 'Y');
-  if (yPointer) {
-    jValue = atof(yPointer + 1);
+
+  moveMotor(xValue, yValue, 500, iValue, jValue, 500);
+}
+
+// Determines which command is being called in Gcode
+int interpretCMD(const char* input) {
+  const char* commandPointer = strchr(input, 'G');  // Find the pointer to the letter 'G' in the string
+  if (commandPointer) {
+    return atoi(commandPointer + 1);  // If there is a 'G', store the value of the following integer in the 'command' variable
+  } else {
+    return 0;
   }
 }
 
-void interpretInput(const char* input, char& userCommand, float& userVar1, float& userVar2, float& userVar3) {
-  const char* userCommandPointer = strchr(input, '/');  // Find the pointer to the letter 'G' in the string
-  if (userCommandPointer) {
-    userCommand = *(userCommandPointer + 1);  // If there is a 'G', store the value of the following integer in the 'command' variable
-  } else {
-    userCommand = 0;
-  }
-  const char* userVar1Pointer = strchr(input, 'A');
-  if (userVar1Pointer) {
-    userVar1 = atof(userVar1Pointer + 1);
-  } else {
-    userVar1 = 0;
-  }
-  const char* userVar2Pointer = strchr(input, 'B');
-  if (userVar2Pointer) {
-    userVar2 = atof(userVar2Pointer + 1);
-  } else {
-    userVar2 = 0;
-  }
-  const char* userVar3Pointer = strchr(input, 'C');
-  if (userVar3Pointer) {
-    userVar3 = atof(userVar3Pointer + 1);
-  } else {
-    userVar3 = 0;
-  }
-}
-
-void userInterface() {
-  char userCommand;
-  float userVar1, userVar2, userVar3;
-
-  Serial.println("Input command.");
-
+void interface() {
   while (!Serial.available())
     ;
-  userInput = Serial.readStringUntil('\n');
+  rxString = Serial.readStringUntil('\n');
+  delay(10);
 
-  interpretInput(userInput.c_str(), userCommand, userVar1, userVar2, userVar3);
+  int command = interpretCMD(rxString.c_str());
 
-  Serial.print(userCommand);
-  Serial.print(" ");
-  Serial.print(userVar1);
-  Serial.print(" ");
-  Serial.print(userVar2);
-  Serial.print(" ");
-  Serial.println(userVar3);
-
-  switch (userCommand) {
-    case 'r':
-      // run command
-      if (homed == true) {
-        Serial.print("Running...");
-        runProgram();
-      } else {
-        Serial.println("Machine should be homed first. Type 'override' to run anyway or anything else to cancel.");
-        while (!Serial.available())
-          ;
-        userInput = Serial.readStringUntil('\n');
-        if (userInput.equals("override")) {
-          runProgram();
-        } else {
-          break;
-        }
-      }
+  switch (command) {
+    case 1:
+      CMD_G1(rxString.c_str(), xValue, yValue, iValue, jValue, feedrate);
       break;
-    case 'h':
-      // home command
+    case 28:
       home();
       break;
-    case 'c':
-      //calibrate command
-      calibrate(xCalibration, yCalibration);
-      break;
-    case 'j':
-      //jog command
-      moveMotor(xMotor.currentPosition() + userVar1, yMotor.currentPosition() + userVar2, userVar3, 0, 0, 0);
-      break;
-    case 'i':
-      // Initialise SD
-      initialiseSD();
+    case 33:
+      calibrate();
       break;
     default:
-      Serial.println("Invalid command.");
+      Serial.print("next");
       break;
-  }
-}
-
-void initialiseSD() {
-  Serial.print("Initializing SD...");
-  if (!SD.begin(SCKPin)) {
-    Serial.println("initialization failed!");
-  } else {
-    Serial.println("initialization done.");
   }
 }

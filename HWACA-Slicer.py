@@ -11,7 +11,7 @@ yOffset = [2, 2]
 
 # Specify paths & feedrate
 filename = ['N-10', 'N-10']
-filepath = [f'Input/{filename[0]}.txt', f'Input/{filename[1]}.txt']
+filepath = [f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{filename[0]}.txt', f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{filename[1]}.txt']
 feedrate = 1000 # in mm/min (constant, will be dynamically changed in later versions)
 
 # ------------------------------------------------------------------------------------------------------------------
@@ -78,14 +78,14 @@ visualise(df['X'], df['Y'])
 # ------------------------------------------------------------------------------------------------------------------
 # Gcode compilation
 
-with open(f'Output/Toolpath_{filename[0]}_{filename[1]}.gcode', 'w') as file: #create file and set mode to write
+with open(f'/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_{filename[0]}_{filename[1]}.gcode', 'w') as file: #create file and set mode to write
     file.write(f";gCode for cutting an aerofoil type {filename[0]}, {filename[1]}")
     file.write('\n')
     file.write('G28')
     
     for index in range(len(df)):
         file.write('\n')
-        file.write(f'G1 X{df.X[index]} Y{df.Y[index]} I{df.I[index]} J{df.J[index]} F{feedrate}')
+        file.write(f'G1 X{round(df.X[index], 4)} Y{round(df.Y[index], 4)} I{round(df.I[index], 4)} J{round(df.J[index], 4)} F{feedrate}')
     
     file.write('\n')
     file.write('G1 X0 Y0 I0 J0')
