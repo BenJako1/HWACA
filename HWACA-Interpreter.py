@@ -1,7 +1,12 @@
+'''
+Serial Arduino interface for HWACA
+Benjamin Jakobs
+Created Sep 2023
+'''
+
 import serial
 import time
 from pathlib import Path
-import pandas as pd
 
 # ---------------------------------------------------------------------------------------------------------------------------
 
