@@ -10,7 +10,7 @@ from pathlib import Path
 
 # ---------------------------------------------------------------------------------------------------------------------------
 
-filepath = '/Users/ben/Desktop/Projects/HWACA/Output/ToolPath_N-10_N-10.gcode' # Define filename
+filepath = '/Users/ben/Desktop/Projects/HWACA-Project/Output/ToolPath_N-10_N-10.gcode' # Define filename
 
 arduino = serial.Serial(port='/dev/cu.usbmodem11401', baudrate=9600, timeout=0.01) # Create serial object "ardiuno"
 
@@ -24,9 +24,6 @@ def readFile(inputPath):
     file.close()
 
     return fileList
-
-#commands_df = pd.DataFrame(readFile(filepath), columns=['CMD','X','Y','I','J','FR'])
-#print(readFile(filepath))
 
 # ---------------------------------------------------------------------------------------------------------------------------
 

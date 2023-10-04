@@ -11,14 +11,14 @@ import matplotlib.pyplot as plt
 
 # Geometry variables
 xFlip = [True, True]
-camberLength = [75, 75]
-xOffset = [2, 2]
-yOffset = [2, 2]
+camberLength = [100, 100]
+xOffset = [0.5, 0.5]
+yOffset = [0.5, 0.5]
 
 # Specify paths & feedrate
 filename = ['N-10', 'N-10']
 filepath = [f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{filename[0]}.txt', f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{filename[1]}.txt']
-feedrate = 1000 # in mm/min (constant, will be dynamically changed in later versions)
+feedrate = 50 # in steps/sec (constant, will be dynamically changed in later versions)
 
 # ------------------------------------------------------------------------------------------------------------------
 # Function definition
@@ -79,7 +79,6 @@ if "__name__" == "__main__":
 
     # ------------------------------------------------------------------------------------------------------------------
     # Visualisation
-
     visualise(df['X'], df['Y'])
 
     # ------------------------------------------------------------------------------------------------------------------

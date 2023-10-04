@@ -4,7 +4,7 @@
   by Benjamin Jakobs, University of Edinburgh
 */
 
-#include <SPI.h>
+// Include required libraries
 #include <AccelStepper.h>
 #include <MultiStepper.h>
 #include <EEPROM.h>
@@ -240,6 +240,8 @@ void home() {
 
   // Set homed to true
   homed = true;
+  // Delay before continuing
+  delay(2000);
   // Output to serial that homing is complete
   Serial.println("next");
 }
@@ -328,8 +330,8 @@ void CMD_G1(const char* input, float& xValue, float& yValue, float& iValue, floa
   if (feedPointer) {
     feedrate = atoi(feedPointer + 1);
   }
-
-  moveMotor(xValue, yValue, 500, iValue, jValue, 500);
+  
+  moveMotor(xValue, yValue, feedrate, iValue, jValue, feedrate);
 }
 
 // Determines which command is being called in Gcode
