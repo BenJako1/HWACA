@@ -1,14 +1,21 @@
 /*
-  GCode interpreter from SD Card
+  GCode interface
   created   Aug 2023
   by Benjamin Jakobs, University of Edinburgh
 */
 
 #include <SPI.h>
-#include <SD.h>
 #include <AccelStepper.h>
 #include <MultiStepper.h>
 #include <EEPROM.h>
+
+// Forward declaring functions
+void moveMotor();
+void home();
+void calibrate();
+void CMD_G1();
+int interpretCMD();
+void interface();
 
 // User variables
 float xCalibration = 25;     // Steps/mm of the x-axis
@@ -351,7 +358,7 @@ void interface() {
       home();
       break;
     case 33:
-      calibrate();
+      //calibrate();
       break;
     default:
       Serial.print("next");
