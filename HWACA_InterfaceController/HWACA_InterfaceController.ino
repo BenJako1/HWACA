@@ -50,8 +50,8 @@ const int yCalibration_Address = 4;
 // Global GCode & operating variables
 float xValue, yValue, iValue, jValue;
 int feedrate;
-String rxString;
 bool homed = false;
+String rxString;
 
 long positionToMove[4];
 AccelStepper xMotor(1, motorPin[0], motorPin[1]);
@@ -101,10 +101,10 @@ void loop() {
 // Movement scripts
 void moveMotor(float xMoveTo, float yMoveTo, int XYFeed, float iMoveTo, float jMoveTo, int IJFeed) {
   // Set speed according to feedrate (given from GCode in mm/min required for setMaxSpeed() in steps/sec)
-  xMotor.setMaxSpeed(XYFeed);
-  yMotor.setMaxSpeed(XYFeed);
-  iMotor.setMaxSpeed(IJFeed);
-  jMotor.setMaxSpeed(IJFeed);
+  xMotor.setMaxSpeed(xCalibration * XYFeed / 60);
+  yMotor.setMaxSpeed(yCalibration * XYFeed / 60);
+  iMotor.setMaxSpeed(xCalibration * IJFeed / 60);
+  jMotor.setMaxSpeed(yCalibration * IJFeed / 60);
   // Move motors appropriate number of steps (required steps/mm)
   positionToMove[0] = xMoveTo * xCalibration;
   positionToMove[1] = yMoveTo * yCalibration;
@@ -117,195 +117,239 @@ void moveMotor(float xMoveTo, float yMoveTo, int XYFeed, float iMoveTo, float jM
 }
 
 // Homing sequence
-void home() {
-  // Set xMotor moving at homeSeek rate towards 0
+void CMD_G28() {
+  // Initialise trigger counters & pulloff booleans
+  int xTrigger = 0;
+  int iTrigger = 0;
+  int yTrigger = 0;
+  int jTrigger = 0;
+  xPulloffSet = false;
+  iPulloffSet = false;
+  yPulloffSet = false;
+  jPulloffSet = false;
+  // Set xMotor & iMotor moving at rate homeSeek towards 0
   xMotor.setSpeed(-homeSeek * xCalibration);
-  // When a trigger is detected, pull off and stop
-  while (digitalRead(xLimitPin) == 1) {
-    xMotor.runSpeed();
-  }
-  xMotor.stop();
-  delay(homeDelay);
-  xMotor.move(homePulloff * xCalibration);
-  while (xMotor.distanceToGo() != 0) {
-    xMotor.run();
-  }
-  xMotor.stop();
-  delay(homeDelay);
-  // Set xMotor moving at homeFeed rate towards 0
-  xMotor.setSpeed(-homeFeed * xCalibration);
-  // When a trigger is detected, pull off and stop
-  while (digitalRead(xLimitPin) == 1) {
-    xMotor.runSpeed();
-  }
-  xMotor.stop();
-  delay(homeDelay);
-  xMotor.move(homePulloff * xCalibration);
-  while (xMotor.distanceToGo() != 0) {
-    xMotor.run();
-  }
-  xMotor.stop();
-  // Set current position to 0
-  xMotor.setCurrentPosition(0);
-
-  // Set yMotor moving at homeSeek rate towards 0
-  yMotor.setSpeed(-homeSeek * yCalibration);
-  // When a trigger is detected, pull off and stop
-  while (digitalRead(yLimitPin) == 1) {
-    yMotor.runSpeed();
-  }
-  yMotor.stop();
-  delay(homeDelay);
-  yMotor.move(homePulloff * yCalibration);
-  while (yMotor.distanceToGo() != 0) {
-    yMotor.run();
-  }
-  yMotor.stop();
-  delay(homeDelay);
-  // Set yMotor moving at homeFeed rate towards 0
-  yMotor.setSpeed(-homeFeed * yCalibration);
-  // When a trigger is detected, pull off and stop
-  while (digitalRead(yLimitPin) == 1) {
-    yMotor.runSpeed();
-  }
-  yMotor.stop();
-  delay(homeDelay);
-  yMotor.move(homePulloff * yCalibration);
-  while (yMotor.distanceToGo() != 0) {
-    yMotor.run();
-  }
-  yMotor.stop();
-  // Set current position to 0
-  yMotor.setCurrentPosition(0);
-
-  // Set iMotor moving at homeSeek rate towards 0
   iMotor.setSpeed(-homeSeek * xCalibration);
-  // When a trigger is detected, pull off and stop
-  while (digitalRead(iLimitPin) == 1) {
-    iMotor.runSpeed();
+  while (xTrigger && iTrigger <= 4) {
+    // Every cycle, read limit switch values & increment if triggered
+    xTrigger += digitalRead(xLimitPin);
+    iTrigger += digitalRead(iLimitPin);
+    // If not triggered yet, run towards 0
+    if (xTrigger == 0) {
+      xMotor.runSpeed();
+    }
+    // If already hit limit, set new target to homePulloff and run to it
+    else if (xTrigger == 1) {
+      if (xPulloffSet == false) {
+        xMotor.move(homePulloff * xCalibration);
+        xPulloffSet = true;
+      }
+      if (xMotor.distanceToGo() != 0) {
+        xMotor.run();
+      }
+      // If at target, increment trigger counter
+      else {
+        xTrigger++;
+      }
+    }
+    // If pulloff is complete, set speed homeFeed towards 0
+    else if (xTrigger == 2) {
+      if (xFeedSet == false) {
+        xMotor.setSpeed(-homeSeek * xCalibration);
+        xFeedSet = true;
+      }
+      xMotor.runSpeed();
+      xPulloffSet = false;
+    }
+    // If already hit limit again, set target to homePulloff again and run to it
+    else if (xTrigger == 3) {
+      if (xPulloffSet == false) {
+        xMotor.move(homePulloff * xCalibration);
+        xPulloffSet = true;
+      }
+      if (xMotor.distanceToGo() != 0) {
+        xMotor.run();
+      }
+      else {
+        xTrigger++;
+      }
+    }
+    // Stop motor after 4 movements are complete
+    else {
+      xMotor.stop();
+    }
+    if (iTrigger == 0) {
+      iMotor.runSpeed();
+    }
+    else if (iTrigger == 1) {
+      if (iPulloffSet == false) {
+        iMotor.move(homePulloff * xCalibration);
+        iPulloffSet = true;
+      }
+      if (iMotor.distanceToGo() != 0) {
+        iMotor.run();
+      }
+      else {
+        iTrigger++;
+      }
+    }
+    else if (iTrigger == 2) {
+      if (iFeedSet == false) {
+        iMotor.setSpeed(-homeSeek * xCalibration);
+        iFeedSet = true;
+      }
+      iMotor.runSpeed();
+      iPulloffSet = false;
+    }
+    else if (iTrigger == 3) {
+      if (iPulloffSet == false) {
+        iMotor.move(homePulloff * xCalibration);
+        iPulloffSet = true;
+      }
+      if (iMotor.distanceToGo() != 0) {
+        iMotor.run();
+      }
+      else {
+        iTrigger++;
+      }
+    }
+    else {
+      iMotor.stop();
+    }
   }
-  iMotor.stop();
-  delay(homeDelay);
-  iMotor.move(homePulloff * xCalibration);
-  while (iMotor.distanceToGo() != 0) {
-    iMotor.run();
-  }
-  iMotor.stop();
-  delay(homeDelay);
-  // Set iMotor moving at homeFeed rate towards 0
-  iMotor.setSpeed(-homeFeed * xCalibration);
-  // When a trigger is detected, pull off and stop
-  while (digitalRead(iLimitPin) == 1) {
-    iMotor.runSpeed();
-  }
-  iMotor.stop();
-  delay(homeDelay);
-  iMotor.move(homePulloff * xCalibration);
-  while (iMotor.distanceToGo() != 0) {
-    iMotor.run();
-  }
-  iMotor.stop();
-  // Set current position to 0
-  iMotor.setCurrentPosition(0);
-
-  // Set jMotor moving at homeSeek rate towards 0
+  yMotor.setSpeed(-homeSeek * yCalibration);
   jMotor.setSpeed(-homeSeek * yCalibration);
-  // When a trigger is detected, pull off and stop
-  while (digitalRead(jLimitPin) == 1) {
-    jMotor.runSpeed();
+  while (yTrigger && jTrigger <= 4) {
+    // Every cycle, read limit switch values & increment if triggered
+    yTrigger += digitalRead(yLimitPin);
+    jTrigger += digitalRead(jLimitPin);
+    // If not triggered yet, run towards 0
+    if (yTrigger == 0) {
+      yMotor.runSpeed();
+    }
+    // If already hit limit, set new target to homePulloff and run to it
+    else if (yTrigger == 1) {
+      if (yPulloffSet == false) {
+        yMotor.move(homePulloff * yCalibration);
+        yPulloffSet = true;
+      }
+      if (yMotor.distanceToGo() != 0) {
+        yMotor.run();
+      }
+      // If at target, increment trigger counter
+      else {
+        yTrigger++;
+      }
+    }
+    // If pulloff is complete, set speed homeFeed towards 0
+    else if (yTrigger == 2) {
+      if (yFeedSet == false) {
+        yMotor.setSpeed(-homeSeek * yCalibration);
+        yFeedSet = true;
+      }
+      yMotor.runSpeed();
+      yPulloffSet = false;
+    }
+    // If already hit limit again, set target to homePulloff again and run to it
+    else if (yTrigger == 3) {
+      if (yPulloffSet == false) {
+        yMotor.move(homePulloff * yCalibration);
+        yPulloffSet = true;
+      }
+      if (yMotor.distanceToGo() != 0) {
+        yMotor.run();
+      }
+      else {
+        yTrigger++;
+      }
+    }
+    // Stop motor after 4 movements are complete
+    else {
+      yMotor.stop();
+    }
+    if (jTrigger == 0) {
+      jMotor.runSpeed();
+    }
+    else if (jTrigger == 1) {
+      if (jPulloffSet == false) {
+        jMotor.move(homePulloff * yCalibration);
+        jPulloffSet = true;
+      }
+      if (jMotor.distanceToGo() != 0) {
+        jMotor.run();
+      }
+      else {
+        jTrigger++;
+      }
+    }
+    else if (jTrigger == 2) {
+      if (jFeedSet == false) {
+        jMotor.setSpeed(-homeSeek * yCalibration);
+        jFeedSet = true;
+      }
+      iMotor.runSpeed();
+      iPulloffSet = false;
+    }
+    else if (jTrigger == 3) {
+      if (jPulloffSet == false) {
+        jMotor.move(homePulloff * yCalibration);
+        jPulloffSet = true;
+      }
+      if (jMotor.distanceToGo() != 0) {
+        jMotor.run();
+      }
+      else {
+        jTrigger++;
+      }
+    }
+    else {
+      jMotor.stop();
+    }
   }
-  jMotor.stop();
-  delay(homeDelay);
-  jMotor.move(homePulloff * yCalibration);
-  while (jMotor.distanceToGo() != 0) {
-    jMotor.run();
-  }
-  jMotor.stop();
-  delay(homeDelay);
-  // Set jMotor moving at homeFeed rate towards 0
-  jMotor.setSpeed(-homeFeed * yCalibration);
-  // When a trigger is detected, pull off and stop
-  while (digitalRead(jLimitPin) == 1) {
-    jMotor.runSpeed();
-  }
-  jMotor.stop();
-  delay(homeDelay);
-  jMotor.move(homePulloff * yCalibration);
-  while (jMotor.distanceToGo() != 0) {
-    jMotor.run();
-  }
-  jMotor.stop();
-  // Set current position to 0
-  jMotor.setCurrentPosition(0);
+}
 
   // Set homed to true
   homed = true;
-  // Delay before continuing
-  delay(2000);
   // Output to serial that homing is complete
-  Serial.println("next");
+  Serial.print("next");
 }
 
 // Calibration function used for calculating axis travel in mm
 void calibrate(float& xCalibration, float& yCalibration) {
-  // Type "ready" for x calibration
-  Serial.println("Type 'ready' for x calibration or anything else to quit calibration.");
-  while (!Serial.available())
-    ;
-  rxString = Serial.readStringUntil('\n');
-  if (rxString.equals("ready")) {
-    // Move calibrationSteps in x
-    xMotor.setSpeed(homeSeek * xCalibration);
-    xMotor.move(calibrationSteps);
-    while (xMotor.distanceToGo() != 0) {
-      xMotor.run();
-    }
-  } else {
-    Serial.println("Calibration cancelled.");
-    return;
+  // Move calibrationSteps in x
+  xMotor.setSpeed(homeSeek * xCalibration);
+  xMotor.move(calibrationSteps);
+  while (xMotor.distanceToGo() != 0) {
+    xMotor.run();
   }
   // Request user to input measured value
-  Serial.print("What is the distance travelled in mm? Input: ");
+  Serial.print("input");
   // Read input value and write to xCalibration
   while (!Serial.available())
     ;
   rxString = Serial.readStringUntil('\n');
-  Serial.println(rxString);
+  Serial.print(rxString);
   xCalibration = calibrationSteps / rxString.toFloat();
-  Serial.print("xCalibration value: ");
-  Serial.println(xCalibration);
-  // Type "ready" for y calibration
-  Serial.println("Type 'ready' for y calibration or anything else to quit calibration.");
-  while (!Serial.available())
-    ;
-  rxString = Serial.readStringUntil('\n');
-  if (rxString.equals("ready")) {
-    // Move calibrationSteps in y
-    yMotor.setSpeed(homeSeek * yCalibration);
-    yMotor.move(calibrationSteps);
-    while (yMotor.distanceToGo() != 0) {
-      yMotor.run();
-    }
-  } else {
-    Serial.println("Calibration cancelled.");
-    return;
+  // Move calibrationSteps in y
+  yMotor.setSpeed(homeSeek * yCalibration);
+  yMotor.move(calibrationSteps);
+  while (yMotor.distanceToGo() != 0) {
+    yMotor.run();
   }
   // Request user to input measured value
-  Serial.print("What is the distance travelled in mm? Input: ");
+  Serial.print("input");
   // Read input value and write to yCalibration
   while (!Serial.available())
     ;
   rxString = Serial.readStringUntil('\n');
-  Serial.println(rxString);
+  Serial.print(rxString);
   yCalibration = calibrationSteps / rxString.toFloat();
-  Serial.print("yCalibration value: ");
-  Serial.println(yCalibration);
 
   // Store to EEPROM
-  EEPROM.put(xCalibration_Address, xCalibration);
-  EEPROM.put(yCalibration_Address, yCalibration);
+  //EEPROM.put(xCalibration_Address, xCalibration);
+  //EEPROM.put(yCalibration_Address, yCalibration);
 
-  Serial.println("next.");
+  Serial.print("next");
 }
 
 // Interprets the G1 command parameters and moves motors
@@ -357,10 +401,10 @@ void interface() {
       CMD_G1(rxString.c_str(), xValue, yValue, iValue, jValue, feedrate);
       break;
     case 28:
-      home();
+      CMD_G28();
       break;
     case 33:
-      //calibrate();
+      CMD_G33();
       break;
     default:
       Serial.print("next");
