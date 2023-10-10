@@ -27,6 +27,7 @@ def readFile(inputPath):
     file.close()
     return fileList
 
+# Write string to serial
 def serialWrite(inputString):
     arduino.write(bytes(inputString, 'utf-8')) # Write string to serial, converting bytes to 8-bit binary
     arduino.write(bytes('\n', 'utf-8')) # Terminate with newline
@@ -41,25 +42,31 @@ def sendFileData():
         arduino.write(bytes(writeList[i], 'utf-8')) # Write string to serial, converting bytes to 8-bit binary
         arduino.write(bytes('\n', 'utf-8')) # Terminate with newline
         time.sleep(0.02)    #delay
-        while rxString != 'next':   # Block until next message is recieved
+        while not '+' in rxString:   # Block until next message is recieved
             rxString = arduino.readline().decode('utf-8')
-            print(writeList[i], i)
+            if rxString and rxString[0] == '!':
+                print(rxString[1:])
         i += 1
+    return True
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # User interface
 
 while True:
     rxString = ''
+    skipBlock = False
     txCommand = input("User input:")  # Wait for input from user
-    if txCommand[0] == '>':
+    if txCommand and txCommand[0] == '>':
         userCommand = txCommand[1:]
         if userCommand == 'run':
-            sendFileData()
+            skipBlock = sendFileData()
     else:
         serialWrite(txCommand)
     time.sleep(0.02)    #delay
-    while rxString != 'next':   # Block until next message is recieved
-        rxString = arduino.readline().decode('utf-8')
-        if rxString == 'input distance':
-            serialWrite(input("Input distance travelled:"))
+    if skipBlock == False:
+        while not '+' in rxString:   # Block until request for next command is recieved
+            rxString = arduino.readline().decode('utf-8')
+            if rxString and rxString[0] == ':':
+                serialWrite(input(rxString[1:]))
+            if rxString and rxString[0] == '!':
+                print(rxString[1:])

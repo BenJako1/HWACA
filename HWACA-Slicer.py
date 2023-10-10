@@ -12,14 +12,23 @@ import matplotlib.pyplot as plt
 
 # Geometry variables
 xFlip = [True, True]
-camberLength = [100, 100]
-xOffset = [0.5, 0.5]
-yOffset = [0.5, 0.5]
+yFlip = [False, False]
+chordLength = [80, 40] # Scales the aeroil
+sweepAngle = 10  # Sweep angle of wings in degrees
+dihedralAngle = 0  # Dihedral angle in degrees
+tipRotation = 0
+xOffset = [5, 5]
+yOffset = [5, 5]
+
+xyBlockOffset = 0    # Distance from the XY plane to face of foam block in mm
+ijBlockOffset = 0    # Distance from the IJ plane to face of foam block in mm
+blockWidth = 100    # Width of the block in mm
 
 # Specify paths & feedrate
-filename = ['N-10', 'N-10']
-filepath = [f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{filename[0]}.txt', f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{filename[1]}.txt']
-feedrate = 100 # in steps/sec (constant, will be dynamically changed in later versions)
+rootFilename = 'WortmannFX05-191'
+tipFilename = 'N-10'
+filepath = [f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{rootFilename}.txt', f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{tipFilename}.txt']
+feedrate = 100  # Max travel speed of wire in mm/sec
 
 # ------------------------------------------------------------------------------------------------------------------
 # Function definition
@@ -47,7 +56,7 @@ def visualise(xAxis, yAxis, iAxis, jAxis):
     plt.title('Aerofoil Profiles')
     plt.xlabel('X')
     plt.ylabel('Y')
-    plt.axis((0, 100, -50, 50))
+    plt.axis((0, 110, -55, 55))
     plt.grid()
     plt.show()
 
@@ -104,12 +113,51 @@ df = expandDF(XY_df, IJ_df)
 # ------------------------------------------------------------------------------------------------------------------
 # Geometry configuration
 
+# Flipping aerofoils if required
 if xFlip[0]: df['X'] = 1 - df['X']
 if xFlip[1]: df['I'] = 1 - df['I']
-df['X'] = df['X'] * camberLength[0]
-df['Y'] = df['Y'] * camberLength[0]
-df['I'] = df['I'] * camberLength[1]
-df['J'] = df['J'] * camberLength[1]
+if yFlip[0]: df['Y'] = max(df['Y']) - df['Y']
+if yFlip[1]: df['J'] = max(df['J']) - df['J']
+# Scaling to fit desired chord length
+df['X'] = df['X'] * chordLength[0]
+df['Y'] = df['Y'] * chordLength[0]
+df['I'] = df['I'] * chordLength[1]
+df['J'] = df['J'] * chordLength[1]
+# Applying rotation to the tip
+rotationCenter = [max(df['I']), df['J'][df['I'].idxmax()]]
+theta = np.radians(tipRotation)
+df['I'] = df['I'] - rotationCenter[0]
+df['J'] = df['J'] - rotationCenter[1]
+points = df['I'] + 1j * df['J']
+rotated_points = points * np.exp(1j * theta)
+df['I_new'] = rotated_points.apply(lambda z: z.real)
+df['J_new'] = rotated_points.apply(lambda z: z.imag)
+df['I_new'] = df['I_new'] + rotationCenter[0]
+df['J_new'] = df['J_new'] + rotationCenter[1]
+df['I'] = df['I_new']
+df['J'] = df['J_new']
+df = df.drop(columns=['I_new', 'J_new'])
+# Aligning leading edges
+df['I'] = df['I'] + max(df['X']) - max(df['I'])
+df['J'] = df['J'] + df['Y'][df['X'].idxmax()] - df['J'][df['I'].idxmax()]
+# Accounting for sweep and dihedral
+df['I'] = df['I'] - blockWidth * np.arctan(np.deg2rad(sweepAngle))
+df['J'] = df['J'] + blockWidth * np.arctan(np.deg2rad(dihedralAngle))
+# Accounting for block offset
+for i in range(len(df)):
+    df['X'][i] = df['X'][i] + (df['X'][i] - df['I'][i]) * xyBlockOffset/ blockWidth
+    df['Y'][i] = df['Y'][i] + (df['Y'][i] - df['J'][i]) * xyBlockOffset/ blockWidth
+    df['I'][i] = df['I'][i] + (df['I'][i] - df['X'][i]) * ijBlockOffset/ blockWidth
+    df['J'][i] = df['J'][i] + (df['J'][i] - df['Y'][i]) * ijBlockOffset/ blockWidth
+# Aligning minimums to axes & offsetting
+xMin = min(df['X'])
+yMin = min(df['Y'])
+iMin = min(df['I'])
+jMin = min(df['J'])
+df['X'] = df['X'] - min(xMin, iMin)
+df['I'] = df['I'] - min(xMin, iMin)
+df['Y'] = df['Y'] - min(yMin, jMin)
+df['J'] = df['J'] - min(yMin, jMin)
 df['X'] = df['X'] + xOffset[0]
 df['Y'] = df['Y'] + yOffset[0]
 df['I'] = df['I'] + xOffset[1]
@@ -123,8 +171,8 @@ visualise(df['X'], df['Y'], df['I'], df['J'])
 # ------------------------------------------------------------------------------------------------------------------
 # Gcode compilation
 
-with open(f'/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_{filename[0]}_{filename[1]}.gcode', 'w') as file: #create file and set mode to write
-    file.write(f";gCode for cutting an aerofoil type {filename[0]}, {filename[1]}")
+with open(f'/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_{rootFilename}_{tipFilename}.gcode', 'w') as file: #create file and set mode to write
+    file.write(f";gCode for cutting an aerofoil type {rootFilename}, {tipFilename}")
     
     for index in range(len(df)):
         file.write('\n')
