@@ -3,11 +3,10 @@
   created Aug 2023
   by Benjamin Jakobs, University of Edinburgh
 */
-
+#include <Arduino.h>
 // Include required libraries
 #include <AccelStepper.h>
 #include <MultiStepper.h>
-#include <EEPROM.h>
 
 // Forward declaring functions
 void moveMotor();
@@ -22,6 +21,7 @@ float xCalibration = 25 * 2;    // Steps/mm of the x-axis
 float yCalibration = 6.25 * 2;  // Steps/mm of the y-axis
 const int xSoftLimit = 110;     // in mm
 const int ySoftLimit = 110;     // in mm
+const int wireTemp = 120;       // Wire temperature in celsius
 
 // Pin definitions
 const int motorPin[8] = { 22, 23, 24, 25, 26, 27, 28, 29 };  // Pins in pairs (Step, Direction) for each motor
@@ -29,6 +29,7 @@ const int xLimitPin = 18;
 const int yLimitPin = 19;
 const int iLimitPin = 20;
 const int jLimitPin = 21;
+const int tempControlPin = 5;
 
 const int bufferSize = 128;  // Adjust the buffer size as needed
 char buffer[bufferSize];     // Create buffer
@@ -43,15 +44,12 @@ const float homePulloff = 4;        // Distance in mm retracted after hitting li
 const int homeDelay = 500;          // Delay in ms between homing operations
 const int calibrationSteps = 200;   // Number of steps done during calibration
 
-// EEPROM addresses
-const int xCalibration_Address = 4;  // Length 4 since float values are stored
-const int yCalibration_Address = 8;
-
 // Global GCode & operating variables
 float xValue, yValue, iValue, jValue;
 int feedrate;
 bool homed = false;
 String rxString;
+bool wireHeat = false;
 
 long positionToMove[4];
 AccelStepper xMotor(1, motorPin[0], motorPin[1]);
@@ -84,10 +82,6 @@ void setup() {
   motorControl.addStepper(iMotor);
   motorControl.addStepper(jMotor);
 
-  // Actualise settings from EEPROM
-  //EEPROM.get(xCalibration_Address, xCalibration);
-  //EEPROM.get(yCalibration_Address, yCalibration);
-
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
   while (!Serial)
@@ -95,6 +89,11 @@ void setup() {
 }
 
 void loop() {
+  while(!Serial.available()) {
+    if (wireHeat) {
+      CMD_G104(wireTemp);
+    }
+  }
   interface();
 }
 
@@ -296,9 +295,12 @@ void CMD_G33(float& xCalibration, float& yCalibration) {
   Serial.print(rxString);
   yCalibration = calibrationSteps / rxString.toFloat();
 
-  // Store to EEPROM
-  EEPROM.put(xCalibration_Address, xCalibration);
-  EEPROM.put(yCalibration_Address, yCalibration);
+  // Print to serial
+  Serial.print("!");
+  Serial.print("xCalibration: ");
+  Serial.print(xCalibration);
+  Serial.print(", yCalibration: ");
+  Serial.print(yCalibration);
 }
 
 // Interprets the G1 command parameters and moves motors
@@ -328,38 +330,47 @@ void CMD_G1(const char* input, float& xValue, float& yValue, float& iValue, floa
 }
 
 // Determines which command is being called in Gcode
-void interpretCMD(const char* input, int& command, int& EESave) {
+void interpretCMD(const char* input, int& command) {
   const char* commandPointer = strchr(input, 'G');  // Find the pointer to the 'G' character in the string
   if (commandPointer) {
     command = atoi(commandPointer + 1);  // If there is a 'G', store the value of the following integer in the 'command' variable
   } else {
     command = 0;
   }
-  const char* EESavePointer = strchr(input, '$');  // Find the pointer to the '$' character in the string
-  if (EESavePointer) {
-    EESave = atoi(EESavePointer + 1);  // If there is a '$', store the value of the following integer in the 'command' variable
-  } else {
-    EESave = 0;
-  }
 }
 
-float interpretEEValue(const char* input) {
-  const char* valuePointer = strchr(input, '=');  // Find the pointer to the 'G' character in the string
-  if (valuePointer) {
-    return atof(valuePointer + 1);  // If there is a 'G', store the value of the following integer in the 'command' variable
-  }
+void CMD_G104(int desiredTemp) {
+  // Static initialize variables
+  static int currentTemp = 0;
+  static int tempError;
+  static float kp = 2;
+  static int pResponse;
+  static float ki = 2;
+  static float errorIntegral;
+  static int iResponse;
+  static int controlResponse;
+  static int lastTimestamp = millis();
+  // Read temperature value
+  // Find error
+  tempError = desiredTemp - currentTemp;
+  // Calculate controller response
+  pResponse = tempError * kp;
+  errorIntegral += tempError * (millis() - lastTimestamp);
+  iResponse = errorIntegral * ki;
+  controlResponse = pResponse + iResponse;
+  // Set PWM output accordingly
+  analogWrite(tempControlPin, map(controlResponse, 0, 100, 0, 255));
+  // Record timestamp for dt
+  lastTimestamp = millis();
 }
 
 void interface() {
   static int command;
-  static int EESave;
 
-  while (!Serial.available())
-    ;
   rxString = Serial.readStringUntil('\n');
   delay(10);
 
-  interpretCMD(rxString.c_str(), command, EESave);
+  interpretCMD(rxString.c_str(), command);
 
   switch (command) {
     case 1:
@@ -371,23 +382,13 @@ void interface() {
     case 33:
       CMD_G33(xCalibration, yCalibration);
       break;
+    case 104:
+      wireHeat = true;
+      break;
+    case 105:
+      wireHeat = false;
+      break;
     default:
-      break;
-  }
-
-  switch (EESave) {
-    case 1:
-      EEPROM.get(xCalibration_Address, xCalibration);
-      EEPROM.get(yCalibration_Address, yCalibration);
-      Serial.print("!xCalibration:");
-      Serial.print(xCalibration);
-      Serial.print(", yCalibration:");
-      Serial.print(yCalibration);
-    case 2:
-      EEPROM.put(xCalibration_Address, interpretEEValue(rxString.c_str()));
-      break;
-    case 3:
-      EEPROM.put(yCalibration_Address, interpretEEValue(rxString.c_str()));
       break;
   }
 

@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 filepath = '/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_N-10_N-10.gcode' # Define filename
-#filepath = '/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_N-10_WortmannFX05-191.gcode' # Define filename
+#filepath = '/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_N-10_WortmannFX05-191.gcode' # Alternate filename
 
 arduino = serial.Serial(port='/dev/cu.usbmodem11401', baudrate=9600, timeout=0.01) # Create serial object "ardiuno"
 

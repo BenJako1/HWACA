@@ -123,7 +123,7 @@ df['X'] = df['X'] * chordLength[0]
 df['Y'] = df['Y'] * chordLength[0]
 df['I'] = df['I'] * chordLength[1]
 df['J'] = df['J'] * chordLength[1]
-# Applying rotation to the tip
+# Applying rotation to the tip using Euler's formula
 rotationCenter = [max(df['I']), df['J'][df['I'].idxmax()]]
 theta = np.radians(tipRotation)
 df['I'] = df['I'] - rotationCenter[0]
@@ -143,7 +143,7 @@ df['J'] = df['J'] + df['Y'][df['X'].idxmax()] - df['J'][df['I'].idxmax()]
 # Accounting for sweep and dihedral
 df['I'] = df['I'] - blockWidth * np.arctan(np.deg2rad(sweepAngle))
 df['J'] = df['J'] + blockWidth * np.arctan(np.deg2rad(dihedralAngle))
-# Accounting for block offset
+# Accounting for block offset, allowing for dimensionally accurate wings
 for i in range(len(df)):
     df['X'][i] = df['X'][i] + (df['X'][i] - df['I'][i]) * xyBlockOffset/ blockWidth
     df['Y'][i] = df['Y'][i] + (df['Y'][i] - df['J'][i]) * xyBlockOffset/ blockWidth
@@ -173,6 +173,8 @@ visualise(df['X'], df['Y'], df['I'], df['J'])
 
 with open(f'/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_{rootFilename}_{tipFilename}.gcode', 'w') as file: #create file and set mode to write
     file.write(f";gCode for cutting an aerofoil type {rootFilename}, {tipFilename}")
+    file.write(f"G104")
+    file.write('\n')
     
     for index in range(len(df)):
         file.write('\n')
@@ -180,4 +182,6 @@ with open(f'/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_{rootFilen
     
     file.write('\n')
     file.write('G1 X0 Y0 I0 J0')
+    file.write(f"G105")
+    file.write('\n')
 file.close()
