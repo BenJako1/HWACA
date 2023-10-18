@@ -49,7 +49,6 @@ float xValue, yValue, iValue, jValue;
 int feedrate;
 bool homed = false;
 String rxString;
-bool wireHeat = false;
 
 long positionToMove[4];
 AccelStepper xMotor(1, motorPin[0], motorPin[1]);
@@ -89,11 +88,6 @@ void setup() {
 }
 
 void loop() {
-  while(!Serial.available()) {
-    if (wireHeat) {
-      CMD_G104(wireTemp);
-    }
-  }
   interface();
 }
 
@@ -296,8 +290,7 @@ void CMD_G33(float& xCalibration, float& yCalibration) {
   yCalibration = calibrationSteps / rxString.toFloat();
 
   // Print to serial
-  Serial.print("!");
-  Serial.print("xCalibration: ");
+  Serial.print("!xCalibration: ");
   Serial.print(xCalibration);
   Serial.print(", yCalibration: ");
   Serial.print(yCalibration);
@@ -339,33 +332,12 @@ void interpretCMD(const char* input, int& command) {
   }
 }
 
-void CMD_G104(int desiredTemp) {
-  // Static initialize variables
-  static int currentTemp = 0;
-  static int tempError;
-  static float kp = 2;
-  static int pResponse;
-  static float ki = 2;
-  static float errorIntegral;
-  static int iResponse;
-  static int controlResponse;
-  static int lastTimestamp = millis();
-  // Read temperature value
-  // Find error
-  tempError = desiredTemp - currentTemp;
-  // Calculate controller response
-  pResponse = tempError * kp;
-  errorIntegral += tempError * (millis() - lastTimestamp);
-  iResponse = errorIntegral * ki;
-  controlResponse = pResponse + iResponse;
-  // Set PWM output accordingly
-  analogWrite(tempControlPin, map(controlResponse, 0, 100, 0, 255));
-  // Record timestamp for dt
-  lastTimestamp = millis();
-}
-
 void interface() {
   static int command;
+
+  while(!Serial.available()) {
+    ;
+  }
 
   rxString = Serial.readStringUntil('\n');
   delay(10);
@@ -381,12 +353,6 @@ void interface() {
       break;
     case 33:
       CMD_G33(xCalibration, yCalibration);
-      break;
-    case 104:
-      wireHeat = true;
-      break;
-    case 105:
-      wireHeat = false;
       break;
     default:
       break;

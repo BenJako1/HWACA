@@ -13,20 +13,21 @@ import matplotlib.pyplot as plt
 # Geometry variables
 xFlip = [True, True]
 yFlip = [False, False]
-chordLength = [80, 40] # Scales the aeroil
+chordLength = [90, 60] # Scales the aeroil
 sweepAngle = 10  # Sweep angle of wings in degrees
 dihedralAngle = 0  # Dihedral angle in degrees
 tipRotation = 0
-xOffset = [5, 5]
-yOffset = [5, 5]
+xOffset = [0, 0]
+yOffset = [0, 0]
 
 xyBlockOffset = 0    # Distance from the XY plane to face of foam block in mm
 ijBlockOffset = 0    # Distance from the IJ plane to face of foam block in mm
 blockWidth = 100    # Width of the block in mm
 
 # Specify paths & feedrate
-rootFilename = 'WortmannFX05-191'
+rootFilename = 'N-10'
 tipFilename = 'N-10'
+# WortmannFX05-191, N-10, Clark-Y
 filepath = [f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{rootFilename}.txt', f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{tipFilename}.txt']
 feedrate = 100  # Max travel speed of wire in mm/sec
 
