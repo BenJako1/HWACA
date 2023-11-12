@@ -25,10 +25,9 @@ ijBlockOffset = 0    # Distance from the IJ plane to face of foam block in mm
 blockWidth = 100    # Width of the block in mm
 
 # Specify paths & feedrate
-rootFilename = 'N-10'
-tipFilename = 'N-10'
-# WortmannFX05-191, N-10, Clark-Y
-filepath = [f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{rootFilename}.txt', f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{tipFilename}.txt']
+filename = ['N-10', 'N-10']
+filepath = [f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{filename[0]}.txt', f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{filename[1]}.txt']
+outputFilepath = f'/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_{rootFilename}_{tipFilename}.gcode'
 feedrate = 100  # Max travel speed of wire in mm/sec
 
 # ------------------------------------------------------------------------------------------------------------------
@@ -172,7 +171,7 @@ visualise(df['X'], df['Y'], df['I'], df['J'])
 # ------------------------------------------------------------------------------------------------------------------
 # Gcode compilation
 
-with open(f'/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_{rootFilename}_{tipFilename}.gcode', 'w') as file: #create file and set mode to write
+with open(outputFilepath, 'w') as file: #create file and set mode to write
     file.write(f";gCode for cutting an aerofoil type {rootFilename}, {tipFilename}")
     file.write(f"G104")
     file.write('\n')
