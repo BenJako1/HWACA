@@ -24,7 +24,7 @@ const int xSoftLimit = 110;  // in mm
 const int ySoftLimit = 110;  // in mm
 
 // Pin definitions
-const int motorPin[8] = { 22, 23, 24, 25, 26, 27, 28, 29 };  // Pins in pairs (Step, Direction) for each motor
+const int motorPin[8] = { 22, 23, 24, 25, 26, 27, 28, 29 };  // Pins in pairs (Step, Direction) for each motor (X, Y, I, J)
 const int xLimitPin = 18;
 const int yLimitPin = 19;
 const int iLimitPin = 20;
