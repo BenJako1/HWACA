@@ -18,6 +18,7 @@ yOffset = [0.5, 0.5]
 # Specify paths & feedrate
 filename = ['N-10', 'N-10']
 filepath = [f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{filename[0]}.txt', f'/Users/ben/Desktop/Projects/HWACA-Project/Input/{filename[1]}.txt']
+outputFilepath = f'/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_{rootFilename}_{tipFilename}.gcode'
 feedrate = 50 # in steps/sec (constant, will be dynamically changed in later versions)
 
 # ------------------------------------------------------------------------------------------------------------------
@@ -84,7 +85,7 @@ if "__name__" == "__main__":
     # ------------------------------------------------------------------------------------------------------------------
     # Gcode compilation
 
-    with open(f'/Users/ben/Desktop/Projects/HWACA-Project/Output/Toolpath_{filename[0]}_{filename[1]}.gcode', 'w') as file: #create file and set mode to write
+    with open(outputFilepath, 'w') as file: #create file and set mode to write
         file.write(f";gCode for cutting an aerofoil type {filename[0]}, {filename[1]}")
         file.write('\n')
         file.write('G28')
